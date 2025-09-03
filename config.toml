@@ -1,0 +1,44 @@
+baseURL = "https://cartoscope-hugo.github.io"
+languageCode = "fr-FR"
+title = "Cartoscope Hugo"
+
+[params]
+  description = "Exploration cartographique et démographique de la France (1790-1982)"
+  author = "Cartoscope Hugo"
+  
+  # Configuration carte par défaut
+  [params.map]
+    centerLat = 46.6
+    centerLon = 2.2
+    defaultZoom = 6
+    
+  # Configuration données par défaut
+  [params.data]
+    defaultYear = 1982
+    defaultSuffix = "h"
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+# Menu principal
+[[menu.main]]
+  name = "Accueil"
+  url = "/"
+  weight = 10
+
+[[menu.main]]
+  name = "Régions"
+  url = "/regions/"
+  weight = 20
+
+# Configuration build
+[build]
+  writeStats = true
+
+# Gestion des assets
+[module]
+  [module.hugoVersion]
+    extended = true
+    min = "0.110.0"

@@ -1,0 +1,238 @@
+<!-- Contrôles de la carte -->
+<div class="map-controls">
+    <div class="control-group">
+        <label for="year-slider">Année :</label>
+        <input type="range" id="year-slider" min="1790" max="1982" value="{{ .Params.year | default .Site.Params.data.defaultYear }}" step="1">
+        <div class="year-display" id="year-display">{{ .Params.year | default .Site.Params.data.defaultYear }}</div>
+    </div>
+    
+    <div class="control-group">
+        <label for="suffix-select">Mesure :</label>
+        <select id="suffix-select">
+            <option value="h" {{ if eq (.Params.suffix | default .Site.Params.data.defaultSuffix) "h" }}selected{{ end }}>Habitants</option>
+            <option value="f" {{ if eq (.Params.suffix | default .Site.Params.data.defaultSuffix) "f" }}selected{{ end }}>Feux</option>
+            <option value="tot" {{ if eq (.Params.suffix | default .Site.Params.data.defaultSuffix) "tot" }}selected{{ end }}>Total</option>
+            <option value="masc" {{ if eq (.Params.suffix | default .Site.Params.data.defaultSuffix) "masc" }}selected{{ end }}>Masculin</option>
+            <option value="g" {{ if eq (.Params.suffix | default .Site.Params.data.defaultSuffix) "g" }}selected{{ end }}>Type G</option>
+        </select>
+    </div>
+    
+    <div class="control-group">
+        <small id="data-info" style="color: #7f8c8d;">Chargement des données...</small>
+    </div>
+</div>
+
+<!-- Conteneur de la carte -->
+<div id="map" class="map">
+    <div class="loading">
+        <div>🗺️ Initialisation de la carte...</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Configuration depuis Hugo
+    const config = {
+        region: {{ .Params.region | default "" | jsonify }},
+        centerLat: {{ .Site.Params.map.centerLat | default 46.6 }},
+        centerLon: {{ .Site.Params.map.centerLon | default 2.2 }},
+        defaultZoom: {{ .Site.Params.map.defaultZoom | default 6 }},
+        defaultYear: {{ .Params.year | default .Site.Params.data.defaultYear }},
+        defaultSuffix: {{ .Params.suffix | default .Site.Params.data.defaultSuffix | jsonify }}
+    };
+    
+    // Paramètres URL
+    const urlParams = new URLSearchParams(window.location.search);
+    let currentYear = parseInt(urlParams.get('year')) || config.defaultYear;
+    let currentSuffix = urlParams.get('suffix') || config.defaultSuffix;
+    let currentRegion = urlParams.get('region') || config.region;
+    
+    // Éléments DOM
+    const yearSlider = document.getElementById('year-slider');
+    const yearDisplay = document.getElementById('year-display');
+    const suffixSelect = document.getElementById('suffix-select');
+    const dataInfo = document.getElementById('data-info');
+    
+    // Mise à jour des contrôles
+    yearSlider.value = currentYear;
+    yearDisplay.textContent = currentYear;
+    suffixSelect.value = currentSuffix;
+    
+    // Initialisation de la carte
+    const map = L.map('map').setView([config.centerLat, config.centerLon], config.defaultZoom);
+    
+    // Fond de carte OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+    
+    // Groupe de marqueurs avec clustering
+    let markersGroup = L.markerClusterGroup({
+        chunkedLoading: true,
+        chunkProgress: function(processed, total, elapsed) {
+            if (processed === total) {
+                updateDataInfo(`${total} lieux chargés`);
+            }
+        }
+    });
+    map.addLayer(markersGroup);
+    
+    // Variables pour les données
+    let geojsonData = null;
+    let seriesData = null;
+    
+    // Fonction de mise à jour des paramètres URL
+    function updateURL() {
+        const params = new URLSearchParams();
+        if (currentRegion) params.set('region', currentRegion);
+        params.set('year', currentYear);
+        params.set('suffix', currentSuffix);
+        
+        const newURL = window.location.pathname + '?' + params.toString();
+        window.history.replaceState({}, '', newURL);
+    }
+    
+    // Fonction de mise à jour des informations
+    function updateDataInfo(message) {
+        dataInfo.textContent = message;
+    }
+    
+    // Fonction de chargement des données
+    function loadRegionData(region) {
+        if (!region) {
+            updateDataInfo('Aucune région spécifiée');
+            return;
+        }
+        
+        updateDataInfo('Chargement des données...');
+        
+        // Chargement du GeoJSON
+        fetch(`/data/${region}.geojson`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Fichier non trouvé: ${region}.geojson`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                geojsonData = data;
+                updateMapData();
+            })
+            .catch(error => {
+                console.error('Erreur de chargement des données:', error);
+                updateDataInfo(`❌ Erreur: ${error.message}`);
+                
+                // Affichage d'une carte de base sans données
+                if (!geojsonData) {
+                    updateDataInfo('Carte de base (sans données régionales)');
+                }
+            });
+    }
+    
+    // Fonction de mise à jour de la carte
+    function updateMapData() {
+        markersGroup.clearLayers();
+        
+        if (!geojsonData || !geojsonData.features) {
+            updateDataInfo('Aucune donnée disponible');
+            return;
+        }
+        
+        let pointsWithData = 0;
+        let totalPoints = 0;
+        
+        geojsonData.features.forEach(feature => {
+            totalPoints++;
+            
+            // Vérification de la géométrie
+            if (!feature.geometry || !feature.geometry.coordinates) {
+                return; // Pas de coordonnées, on passe
+            }
+            
+            const props = feature.properties;
+            const coords = feature.geometry.coordinates;
+            
+            // Recherche de la valeur pour l'année et le suffixe actuels
+            let currentValue = null;
+            if (props.series && props.series.points) {
+                const dataPoint = props.series.points.find(p => 
+                    p.year === currentYear && p.suffix === currentSuffix
+                );
+                if (dataPoint) {
+                    currentValue = dataPoint.value;
+                    pointsWithData++;
+                }
+            }
+            
+            // Création du marqueur
+            const radius = currentValue ? Math.max(3, Math.sqrt(currentValue) / 10) : 4;
+            const color = currentValue ? '#3498db' : '#95a5a6';
+            const fillOpacity = currentValue ? 0.7 : 0.3;
+            
+            const marker = L.circleMarker([coords[1], coords[0]], {
+                radius: radius,
+                fillColor: color,
+                color: '#2c3e50',
+                weight: 1,
+                opacity: 0.8,
+                fillOpacity: fillOpacity
+            });
+            
+            // Popup avec informations
+            const popupContent = `
+                <div style="min-width: 200px;">
+                    <h4 style="margin: 0 0 10px 0; color: #2c3e50;">${props.nom || 'Lieu inconnu'}</h4>
+                    <p style="margin: 5px 0;"><strong>INSEE:</strong> ${props.insee || 'N/A'}</p>
+                    <p style="margin: 5px 0;"><strong>${currentYear} (${currentSuffix}):</strong> 
+                        ${currentValue !== null ? currentValue.toLocaleString('fr-FR') : 'Données non disponibles'}
+                    </p>
+                    ${props.admin ? `
+                        <hr style="margin: 10px 0;">
+                        <p style="margin: 5px 0; font-size: 0.9em;"><strong>Diocese:</strong> ${props.admin.diocese || 'N/A'}</p>
+                        <p style="margin: 5px 0; font-size: 0.9em;"><strong>Intendance:</strong> ${props.admin.intendance || 'N/A'}</p>
+                    ` : ''}
+                </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+            markersGroup.addLayer(marker);
+        });
+        
+        // Mise à jour des informations
+        const dataMsg = pointsWithData > 0 ? 
+            `${pointsWithData}/${totalPoints} lieux avec données pour ${currentYear} (${currentSuffix})` :
+            `${totalPoints} lieux chargés (pas de données pour ${currentYear} - ${currentSuffix})`;
+        updateDataInfo(dataMsg);
+        
+        // Centrage automatique si on a des données
+        if (markersGroup.getLayers().length > 0) {
+            map.fitBounds(markersGroup.getBounds(), { padding: [20, 20] });
+        }
+    }
+    
+    // Gestionnaires d'événements
+    yearSlider.addEventListener('input', function() {
+        currentYear = parseInt(this.value);
+        yearDisplay.textContent = currentYear;
+        updateMapData();
+        updateURL();
+    });
+    
+    suffixSelect.addEventListener('change', function() {
+        currentSuffix = this.value;
+        updateMapData();
+        updateURL();
+    });
+    
+    // Chargement initial
+    if (currentRegion) {
+        loadRegionData(currentRegion);
+    } else {
+        updateDataInfo('🗺️ Sélectionnez une région pour afficher les données');
+    }
+    
+    // Mise à jour URL initiale
+    updateURL();
+});
+</script>
