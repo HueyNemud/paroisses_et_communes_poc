@@ -1,0 +1,24 @@
+baseURL = "https://cartoscope-hugo.github.io"
+languageCode = "fr-FR"
+title = "Paroisses & Communes"
+
+[params]
+description = "Exploration cartographique et démographique de la France (1790-1982)"
+author = "CRH"
+
+# Configuration carte par défaut
+[params.map]
+centerLat = 46.6
+centerLon = 2.2
+defaultZoom = 6
+
+# Configuration données par défaut
+[params.data]
+defaultYear = 1982
+defaultSuffix = "h"
+
+[markup.goldmark.renderer]
+unsafe = true
+
+ignoreFiles = ["\\.qmd$", "\\.ipynb$", "\\.py$"]
+
