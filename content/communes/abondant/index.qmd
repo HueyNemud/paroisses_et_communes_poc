@@ -48,7 +48,7 @@ df_plot = df_pop.dropna(subset=['population'])
 if df_plot.empty:
     print('Aucune donnée disponible.')
 else:
-    fig = px.scatter(df_plot, x='year', y='population',
+    fig = px.line(df_plot, x='year', y='population', markers=True,
                   title='Population par année')
     fig.update_layout(xaxis_title='Année', yaxis_title='Population')
     fig.show()

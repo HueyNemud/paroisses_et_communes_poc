@@ -1,0 +1,55 @@
+---
+title: "Allaines-Mervilliers"
+format: html
+execute:
+  evaluate: true
+---
+
+# Allaines-Mervilliers
+
+## Informations hiérarchiques
+
+| Propriété | Valeur |
+|---|---|
+| insee | 28002 |
+| section | A |
+| superficie | 2222 |
+| intendance | Orléans |
+| election | Orléans |
+| subdelegation | Orléans |
+| grenier | Janville |
+| coutume | Orléans |
+| parlement | Paris |
+| bailliage | Janville (Orléans) |
+| gouvernement | Orléanais |
+| diocese | Orléans |
+| archidiacone | Beauce |
+| doyenne | s_o |
+| vocable | saint Martin et saint Phalier |
+| presentateur | archidiacre de Beauce |
+| district_1790 | Janville |
+| canton_1790 | Janville |
+| canton_1801 | Janville |
+| arrondissement_1982 | Chartres |
+| canton _1982 | Janville |
+
+## Évolution historique de la population
+
+
+```{python}
+import pandas as pd
+import plotly.express as px
+
+pairs = [(1250, None), (1616, 100), (1665, 92), (1680, None), (1680, None), (1686, None), (1686, None), (1693, None), (1700, None), (1709, 94), (1710, None), (1713, 100), (1720, 94), (1725, 21), (1725, 62), (1726, 84), (1726, 302), (1730, None), (1735, 98), (1735, None), (1735, None), (1741, 115), (1743, None), (1745, None), (1745, None), (1746, None), (1746, None), (1755, None), (1755, None), (1757, None), (1757, None), (1766, 94), (1768, None), (1774, None), (1775, None), (1775, None), (1785, None), (1785, None), (1786, 111), (1786, 389), (1787, 109), (1787, 409), (1788, 112), (1788, 404), (1789, 116), (1789, 414), (1789, 108), (1789, None), (1790, None), (1790, None), (1790, 107), (1790, 400), (1793, None), (1801, 428), (1801, None), (1801, 465), (1806, 476), (1820, 502), (1826, 536), (1831, 552), (1836, 576), (1841, 550), (1846, 537), (1851, 569), (1856, 563), (1861, 563), (1866, 585), (1872, 583), (1876, 564), (1881, 539), (1886, 520), (1891, 530), (1896, 524), (1901, 489), (1906, 469), (1911, 407), (1921, 351), (1926, 375), (1931, 370), (1936, 394), (1946, 388), (1954, 358), (1962, 308), (1962, 326), (1968, 309), (1975, 306), (1982, None), (1982, None), (1982, 277)]
+df_pop = pd.DataFrame(pairs, columns=['year','population']).sort_values('year')
+df_pop['population'] = pd.to_numeric(df_pop['population'], errors='coerce')
+df_plot = df_pop.dropna(subset=['population'])
+
+if df_plot.empty:
+    print('Aucune donnée disponible.')
+else:
+    fig = px.line(df_plot, x='year', y='population', markers=True,
+                  title='Population par année')
+    fig.update_layout(xaxis_title='Année', yaxis_title='Population')
+    fig.show()
+```

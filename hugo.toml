@@ -22,3 +22,6 @@ unsafe = true
 
 ignoreFiles = ["\\.qmd$", "\\.ipynb$", "\\.py$"]
 
+[caches]
+  [caches.images]
+    dir = ':cacheDir/images'
