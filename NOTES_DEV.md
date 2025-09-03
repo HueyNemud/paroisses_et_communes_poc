@@ -54,14 +54,50 @@ Pour activer le déploiement automatique :
 - `.copilot-instructions.md` : Guide pour Copilot avec feuille de route
 - `README.md` : Documentation complète du projet
 
-## 🎯 Prochaine étape : Étape 2 - Pipeline ETL
+## ✅ Étape 2 : Pipeline ETL (TERMINÉE)
 
-### Objectifs
+### Réalisations
 
-- Pipeline Quarto/Python pour CSV → JSON/GeoJSON
-- Traitement données Eure-et-Loir
-- Génération fichiers dans `static/data/`
-- Test intégration carte avec vraies données
+- [x] Configuration Quarto (`_quarto.yml`)
+- [x] Pipeline ETL Python complet (`pipeline.py`)
+- [x] Environnement Python configuré (venv + pandas, numpy, jupyter)
+- [x] Processing CSV Eure-et-Loir → JSON/GeoJSON réussi
+- [x] Génération des 4 fichiers de sortie par région
+- [x] Page région Eure-et-Loir créée et intégrée
+- [x] Test d'intégration site + données fonctionnel
+
+### Validation étape 2
+
+- [x] Pipeline ETL s'exécute sans erreur
+- [x] 4 fichiers JSON/GeoJSON générés et valides (9.1 MB total)
+- [x] 489 communes traitées avec 22 687 points de données
+- [x] 13 types de suffixes détectés (h, f, f_tot, etc.)
+- [x] Site Hugo intègre et affiche les données correctement
+- [x] Contrôles carte fonctionnels (timeline, sélecteurs)
+
+### Données traitées - Résumé
+
+- **489 communes** Eure-et-Loir
+- **86 colonnes temporelles** (V_1250_f à V_1982_h)
+- **732 ans de données** (1250-1982)
+- **99,8% complétude** (488/489 communes avec données)
+- **15 flags d'incertitude** détectés et préservés
+- **0 coordonnées géographiques** (carte inactive pour l'instant)
+
+### Fichiers générés
+
+- `eure-et-loir.geojson` (4.7 MB) : Features avec propriétés complètes
+- `eure-et-loir-series.json` (4.4 MB) : Format long/tidy (22 687 records)
+- `eure-et-loir-aggregates.json` (14 KB) : 83 agrégations pré-calculées
+- `eure-et-loir-quality-report.json` (790 B) : Métriques de qualité
+
+### Fonctionnalités pipeline
+
+- **Nettoyage robuste** : Gestion `lac.`, `n_c`, `s_o`, flags `!`
+- **Parsing intelligent** : Colonnes `V_ANNEE_SUFFIXE` → structures JSON
+- **Suffixes composés** : Support `f_tot`, `f_masc`, etc.
+- **Validation** : Contrôles JSON, métriques qualité, rapports
+- **Gestion erreurs** : Coordonnées manquantes, valeurs invalides
 
 ### Commandes à exécuter
 ```bash
@@ -179,5 +215,5 @@ wget https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.cs
 
 ---
 
-**Dernière mise à jour** : 3 septembre 2025 - 11:31  
-**Status** : ✅ Étape 1 terminée, prêt pour Étape 2 (Pipeline ETL)
+**Dernière mise à jour** : 3 septembre 2025 - 11:40  
+**Status** : ✅ Étape 2 terminée, prêt pour Étape 3 (Page région + graphiques)

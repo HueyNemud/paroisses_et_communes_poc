@@ -1,0 +1,425 @@
+---
+title: "Pipeline ETL - Eure-et-Loir"
+subtitle: "Transformation CSV → JSON/GeoJSON"
+format: html
+execute:
+  echo: false
+  warning: false
+---
+
+```{python}
+import pandas as pd
+import json
+import re
+import pathlib
+from typing import Dict, List, Any, Optional
+import numpy as np
+
+print("🔄 Début du pipeline ETL Eure-et-Loir...")
+```
+
+## Configuration et chemins
+
+```{python}
+# Chemins des fichiers
+SRC_CSV = pathlib.Path('../data/Eure_et_Loire.csv')
+COORDS_CSV = pathlib.Path('../data/coords/communes-centroids.csv')
+OUTPUT_DIR = pathlib.Path('../static/data')
+REGION_SLUG = 'eure-et-loir'
+
+# Création du dossier de sortie
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Valeurs considérées comme manquantes
+MISSING_VALUES = {"lac.", "n_c", "s_o", "", "nan", None}
+
+# Replacements pour nettoyage
+REPLACEMENTS = {
+    "\xa0": " ",  # Espace insécable
+    ",": "",      # Virgules dans les nombres
+    " ": "",      # Espaces dans les nombres
+}
+
+print(f"📁 Fichier source : {SRC_CSV}")
+print(f"📁 Sortie : {OUTPUT_DIR}")
+print(f"🏷️ Région : {REGION_SLUG}")
+```
+
+## Chargement et nettoyage des données
+
+```{python}
+# Chargement du CSV
+print("📊 Chargement du CSV...")
+df = pd.read_csv(SRC_CSV, dtype=str, keep_default_na=False)
+print(f"   └─ {len(df)} lignes, {len(df.columns)} colonnes")
+
+# Fonction de nettoyage
+def clean_value(value):
+    """Nettoie une valeur en gérant les cas spéciaux"""
+    if pd.isna(value) or value in MISSING_VALUES:
+        return None
+    
+    value_str = str(value).strip()
+    if value_str in MISSING_VALUES:
+        return None
+    
+    return value_str
+
+# Nettoyage général
+print("🧹 Nettoyage des données...")
+for col in df.columns:
+    df[col] = df[col].apply(clean_value)
+
+print(f"   └─ Données nettoyées")
+```
+
+## Détection et parsing des colonnes de séries
+
+```{python}
+# Détection des colonnes de séries (commençant par V_)
+series_cols = [col for col in df.columns if col.startswith('V_')]
+identity_cols = [col for col in df.columns if not col.startswith('V_')]
+
+print(f"📈 Colonnes de séries détectées : {len(series_cols)}")
+print(f"🏷️ Colonnes d'identité : {len(identity_cols)}")
+
+def parse_series_column(col_name: str, value: str) -> Optional[Dict[str, Any]]:
+    """Parse une colonne de série temporelle"""
+    if value is None:
+        return None
+    
+    # Détection du flag d'incertitude
+    has_uncertainty = '!' in value
+    clean_value = value.replace('!', '') if has_uncertainty else value
+    
+    # Nettoyage de la valeur numérique
+    for old, new in REPLACEMENTS.items():
+        clean_value = clean_value.replace(old, new)
+    
+    # Conversion en nombre
+    try:
+        numeric_value = int(clean_value)
+    except (ValueError, TypeError):
+        return None
+    
+    # Parsing du nom de colonne : V_ANNEE_SUFFIXE
+    parts = col_name.split('_')
+    if len(parts) < 3:
+        return None
+    
+    year_part = parts[1]
+    suffix = '_'.join(parts[2:])  # Gère les suffixes composés comme f_tot
+    
+    # Conversion de l'année
+    try:
+        year = int(year_part)
+    except ValueError:
+        # Gestion du calendrier républicain (à implémenter plus tard)
+        if year_part.startswith('an_'):
+            print(f"⚠️ Calendrier républicain détecté : {year_part} (mapping requis)")
+            return None
+        return None
+    
+    return {
+        "key": col_name,
+        "year": year,
+        "suffix": suffix,
+        "value": numeric_value,
+        "uncertainty": has_uncertainty
+    }
+
+# Test de parsing sur quelques colonnes
+sample_cols = series_cols[:5]
+print(f"🧪 Test parsing sur {len(sample_cols)} colonnes...")
+for col in sample_cols:
+    sample_value = df[col].dropna().iloc[0] if not df[col].dropna().empty else None
+    if sample_value:
+        parsed = parse_series_column(col, sample_value)
+        print(f"   └─ {col} → {parsed}")
+```
+
+## Chargement des coordonnées (optionnel)
+
+```{python}
+# Tentative de chargement des coordonnées
+coords_df = None
+if COORDS_CSV.exists():
+    print("🗺️ Chargement des coordonnées...")
+    coords_df = pd.read_csv(COORDS_CSV, dtype={'insee': str})
+    coords_df.columns = [c.lower() for c in coords_df.columns]
+    print(f"   └─ {len(coords_df)} coordonnées chargées")
+else:
+    print("⚠️ Fichier de coordonnées non trouvé - carte sera inactive")
+```
+
+## Génération du GeoJSON
+
+```{python}
+print("🗺️ Génération du GeoJSON...")
+
+features = []
+stats = {
+    'total_communes': 0,
+    'with_coords': 0,
+    'with_series_data': 0,
+    'uncertainty_flags': 0
+}
+
+for idx, row in df.iterrows():
+    stats['total_communes'] += 1
+    
+    # Propriétés de base (colonnes d'identité)
+    properties = {}
+    
+    # Colonnes d'identité de base
+    basic_props = {}
+    for col in ['nom', 'insee', 'section', 'superficie']:
+        if col in row and row[col] is not None:
+            basic_props[col] = row[col]
+    
+    properties.update(basic_props)
+    
+    # Hiérarchies administratives
+    admin_cols = [
+        'intendance', 'election', 'subdelegation', 'grenier', 'coutume', 
+        'parlement', 'bailliage', 'gouvernement', 'diocese', 'archidiacone', 
+        'doyenne', 'vocable', 'presentateur'
+    ]
+    
+    admin_data = {}
+    for col in admin_cols:
+        if col in row and row[col] is not None:
+            admin_data[col] = row[col]
+    
+    if admin_data:
+        properties['admin'] = admin_data
+    
+    # Administration moderne
+    modern_admin_cols = [
+        'district_1790', 'canton_1790', 'canton_1801', 
+        'arrondissement_1982', 'canton _1982'
+    ]
+    
+    modern_admin = {}
+    for col in modern_admin_cols:
+        if col in row and row[col] is not None:
+            # Nettoyage du nom de colonne
+            clean_col = col.replace(' _', '_').replace('_', '_')
+            modern_admin[clean_col] = row[col]
+    
+    if modern_admin:
+        properties['revolution_xix'] = modern_admin
+    
+    # Parsing des séries temporelles
+    series_points = []
+    has_uncertainty = False
+    
+    for col in series_cols:
+        if col in row and row[col] is not None:
+            parsed = parse_series_column(col, row[col])
+            if parsed:
+                series_points.append(parsed)
+                if parsed.get('uncertainty', False):
+                    has_uncertainty = True
+    
+    if series_points:
+        stats['with_series_data'] += 1
+        properties['series'] = {
+            'unit_note': 'Suffixes: h=habitants, f=feux, tot=total, masc=masculin, g=type_g',
+            'points': series_points
+        }
+    
+    # Flags
+    properties['flags'] = {
+        'incertitude': has_uncertainty
+    }
+    
+    if has_uncertainty:
+        stats['uncertainty_flags'] += 1
+    
+    # Géométrie (coordonnées)
+    geometry = None
+    if coords_df is not None and 'insee' in properties:
+        coords_match = coords_df[coords_df['insee'] == properties['insee']]
+        if not coords_match.empty:
+            lat = float(coords_match.iloc[0]['lat'])
+            lon = float(coords_match.iloc[0]['lon'])
+            geometry = {
+                "type": "Point",
+                "coordinates": [lon, lat]
+            }
+            stats['with_coords'] += 1
+    
+    # Création du feature
+    feature = {
+        "type": "Feature",
+        "geometry": geometry,
+        "properties": properties
+    }
+    
+    features.append(feature)
+
+# Assemblage du GeoJSON
+geojson = {
+    "type": "FeatureCollection",
+    "features": features
+}
+
+# Sauvegarde
+geojson_path = OUTPUT_DIR / f'{REGION_SLUG}.geojson'
+with open(geojson_path, 'w', encoding='utf-8') as f:
+    json.dump(geojson, f, ensure_ascii=False, indent=2)
+
+print(f"✅ GeoJSON sauvegardé : {geojson_path}")
+print(f"   └─ {stats['total_communes']} communes")
+print(f"   └─ {stats['with_coords']} avec coordonnées")
+print(f"   └─ {stats['with_series_data']} avec données temporelles")
+print(f"   └─ {stats['uncertainty_flags']} avec flags d'incertitude")
+```
+
+## Génération du fichier series (format long)
+
+```{python}
+print("📊 Génération du fichier series (format long)...")
+
+series_records = []
+
+for feature in features:
+    props = feature['properties']
+    base_info = {
+        'insee': props.get('insee'),
+        'nom': props.get('nom'),
+        'region': REGION_SLUG
+    }
+    
+    if 'series' in props and 'points' in props['series']:
+        for point in props['series']['points']:
+            record = base_info.copy()
+            record.update(point)
+            series_records.append(record)
+
+# Conversion en DataFrame pour validation
+series_df = pd.DataFrame(series_records)
+
+print(f"   └─ {len(series_records)} enregistrements de séries")
+if not series_df.empty:
+    print(f"   └─ Années : {series_df['year'].min()} - {series_df['year'].max()}")
+    print(f"   └─ Suffixes : {sorted(series_df['suffix'].unique())}")
+
+# Sauvegarde
+series_path = OUTPUT_DIR / f'{REGION_SLUG}-series.json'
+with open(series_path, 'w', encoding='utf-8') as f:
+    json.dump(series_records, f, ensure_ascii=False, indent=2)
+
+print(f"✅ Series JSON sauvegardé : {series_path}")
+```
+
+## Génération des agrégats régionaux
+
+```{python}
+print("📈 Génération des agrégats régionaux...")
+
+if not series_df.empty:
+    # Agrégation par année et suffixe
+    aggregates = series_df.groupby(['year', 'suffix'], dropna=True).agg({
+        'value': ['sum', 'count', 'mean', 'std']
+    }).round(2)
+    
+    # Aplatissement des colonnes multi-index
+    aggregates.columns = ['_'.join(col).strip() for col in aggregates.columns]
+    aggregates = aggregates.reset_index()
+    
+    # Ajout des métadonnées
+    aggregates['region'] = REGION_SLUG
+    
+    # Conversion en liste de dictionnaires
+    agg_records = aggregates.to_dict('records')
+    
+    print(f"   └─ {len(agg_records)} agrégats calculés")
+    
+    # Sauvegarde
+    agg_path = OUTPUT_DIR / f'{REGION_SLUG}-aggregates.json'
+    with open(agg_path, 'w', encoding='utf-8') as f:
+        json.dump(agg_records, f, ensure_ascii=False, indent=2)
+    
+    print(f"✅ Agrégats sauvegardés : {agg_path}")
+else:
+    print("⚠️ Pas de données de séries - agrégats non générés")
+```
+
+## Rapport de qualité des données
+
+```{python}
+print("📋 Génération du rapport de qualité...")
+
+# Calcul des métriques de qualité
+quality_report = {
+    'region': REGION_SLUG,
+    'date_processing': pd.Timestamp.now().isoformat(),
+    'source_file': str(SRC_CSV),
+    'total_communes': stats['total_communes'],
+    'communes_with_coordinates': stats['with_coords'],
+    'communes_with_series': stats['with_series_data'],
+    'uncertainty_flags': stats['uncertainty_flags'],
+    'series_columns_total': len(series_cols),
+    'series_records_generated': len(series_records)
+}
+
+if not series_df.empty:
+    quality_report.update({
+        'year_range': f"{series_df['year'].min()}-{series_df['year'].max()}",
+        'suffixes_available': sorted(series_df['suffix'].unique()),
+        'completeness_by_suffix': {}
+    })
+    
+    # Complétude par suffixe
+    for suffix in series_df['suffix'].unique():
+        subset = series_df[series_df['suffix'] == suffix]
+        completeness = len(subset) / stats['total_communes'] * 100
+        quality_report['completeness_by_suffix'][suffix] = round(completeness, 1)
+
+# Sauvegarde du rapport
+report_path = OUTPUT_DIR / f'{REGION_SLUG}-quality-report.json'
+with open(report_path, 'w', encoding='utf-8') as f:
+    json.dump(quality_report, f, ensure_ascii=False, indent=2)
+
+print(f"✅ Rapport de qualité : {report_path}")
+print("\n📊 Résumé du traitement :")
+for key, value in quality_report.items():
+    if not key.startswith('date_') and not key.startswith('source_'):
+        print(f"   └─ {key}: {value}")
+```
+
+## Validation des fichiers générés
+
+```{python}
+print("\n🔍 Validation des fichiers générés...")
+
+files_to_check = [
+    f'{REGION_SLUG}.geojson',
+    f'{REGION_SLUG}-series.json',
+    f'{REGION_SLUG}-aggregates.json',
+    f'{REGION_SLUG}-quality-report.json'
+]
+
+all_valid = True
+for filename in files_to_check:
+    filepath = OUTPUT_DIR / filename
+    if filepath.exists():
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            print(f"✅ {filename} - Valide ({filepath.stat().st_size} bytes)")
+        except json.JSONDecodeError as e:
+            print(f"❌ {filename} - Erreur JSON: {e}")
+            all_valid = False
+    else:
+        print(f"❌ {filename} - Fichier manquant")
+        all_valid = False
+
+if all_valid:
+    print("\n🎉 Pipeline ETL terminé avec succès !")
+    print(f"📁 Tous les fichiers sont disponibles dans : {OUTPUT_DIR}")
+else:
+    print("\n⚠️ Erreurs détectées dans le pipeline")
+```

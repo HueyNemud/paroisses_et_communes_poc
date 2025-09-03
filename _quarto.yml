@@ -1,0 +1,12 @@
+project:
+  type: hugo
+        
+format: 
+  html:
+    code-fold: true
+    
+execute: 
+  warning: false
+
+jupyter: cartoscope-env
+

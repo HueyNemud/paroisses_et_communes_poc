@@ -1,0 +1,265 @@
+---
+title: "Eure-et-Loir"
+region: "Eure-et-loir"
+params:
+  year: 1982
+  suffix: "h"
+format: html
+jupyter: cartoscope-venv
+---
+
+```{python}
+#| label: fig-polar
+#| fig-cap: "A line plot on a polar axis"
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+r = np.arange(0, 2, 0.01)
+theta = 2 * np.pi * r
+fig, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+ax.plot(theta, r)
+ax.set_rticks([0.5, 1, 1.5, 2])
+ax.grid(True)
+plt.show()
+```
+
+```{python}
+import pandas as pd
+import json
+import pathlib
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
+
+# Configuration
+REGION_SLUG = 'eure-et-loir'
+DATA_DIR = pathlib.Path('../../static/data')
+
+# Chargement des données
+series_path = DATA_DIR / f'{REGION_SLUG}-series.json'
+aggregates_path = DATA_DIR / f'{REGION_SLUG}-aggregates.json'
+quality_path = DATA_DIR / f'{REGION_SLUG}-quality-report.json'
+
+print("📊 Chargement des données pour visualisation...")
+```
+
+```{python}
+
+```
+# Eure-et-Loir : Exploration démographique et cartographique
+
+L'**Eure-et-Loir** offre un terrain d'étude fascinant pour comprendre l'évolution démographique et administrative française sur près de huit siècles.
+
+## Aperçu des données
+
+```{python}
+# Chargement du rapport de qualité
+with open(quality_path, 'r', encoding='utf-8') as f:
+    quality_report = json.load(f)
+
+print(f"📋 Données traitées :")
+print(f"   • {quality_report['total_communes']} communes")
+print(f"   • {quality_report['series_records_generated']:,} points de données")
+print(f"   • Période : {quality_report['year_range']}")
+print(f"   • {len(quality_report['suffixes_available'])} types de mesures")
+```
+
+Cette région présente des données exceptionnellement riches avec **489 communes** répertoriées, couvrant **732 années** d'histoire démographique et administrative.
+
+## Évolution démographique régionale
+
+```{python}
+# Chargement des agrégats pour graphiques
+with open(aggregates_path, 'r', encoding='utf-8') as f:
+    aggregates = pd.DataFrame(json.load(f))
+
+# Graphique d'évolution pour les habitants
+habitants_data = aggregates[aggregates['suffix'] == 'h'].copy()
+habitants_data = habitants_data.sort_values('year')
+
+if not habitants_data.empty:
+    fig_evolution = px.line(
+        habitants_data, 
+        x='year', 
+        y='value_sum',
+        title='Évolution de la population totale (habitants)',
+        labels={
+            'year': 'Année',
+            'value_sum': 'Population totale',
+            'value_count': 'Nombre de communes'
+        },
+        hover_data=['value_count']
+    )
+    
+    fig_evolution.update_layout(
+        xaxis_title="Année",
+        yaxis_title="Population totale",
+        hovermode='x unified',
+        template='plotly_white'
+    )
+    
+    fig_evolution.update_traces(
+        line=dict(width=3, color='#3498db'),
+        hovertemplate='<b>%{x}</b><br>Population: %{y:,}<br>Communes: %{customdata[0]}<extra></extra>'
+    )
+    
+    fig_evolution.show()
+else:
+    print("⚠️ Pas de données 'habitants' pour le graphique d'évolution")
+```
+
+### Analyse par type de mesure
+
+```{python}
+# Graphique de comparaison par suffixe
+fig_suffixes = make_subplots(
+    rows=2, cols=2,
+    subplot_titles=['Habitants (h)', 'Feux (f)', 'Total (f_tot)', 'Masculin (f_masc)'],
+    vertical_spacing=0.1
+)
+
+suffixes_to_plot = ['h', 'f', 'f_tot', 'f_masc']
+positions = [(1,1), (1,2), (2,1), (2,2)]
+
+for i, suffix in enumerate(suffixes_to_plot):
+    data_suffix = aggregates[aggregates['suffix'] == suffix].copy()
+    data_suffix = data_suffix.sort_values('year')
+    
+    if not data_suffix.empty:
+        row, col = positions[i]
+        fig_suffixes.add_trace(
+            go.Scatter(
+                x=data_suffix['year'],
+                y=data_suffix['value_sum'],
+                mode='lines+markers',
+                name=suffix,
+                line=dict(width=2),
+                marker=dict(size=4)
+            ),
+            row=row, col=col
+        )
+
+fig_suffixes.update_layout(
+    title_text="Évolution par type de mesure",
+    showlegend=False,
+    template='plotly_white',
+    height=600
+)
+
+fig_suffixes.update_xaxes(title_text="Année")
+fig_suffixes.update_yaxes(title_text="Total régional")
+
+fig_suffixes.show()
+```
+
+### Distribution des données par période
+
+```{python}
+# Analyse de la complétude temporelle
+with open(series_path, 'r', encoding='utf-8') as f:
+    series_data = pd.DataFrame(json.load(f))
+
+# Complétude par décennie
+series_data['decade'] = (series_data['year'] // 10) * 10
+completeness_by_decade = series_data.groupby(['decade', 'suffix']).size().reset_index(name='count')
+
+# Focus sur les habitants
+h_completeness = completeness_by_decade[completeness_by_decade['suffix'] == 'h']
+
+if not h_completeness.empty:
+    fig_completeness = px.bar(
+        h_completeness,
+        x='decade',
+        y='count',
+        title='Disponibilité des données "habitants" par décennie',
+        labels={'decade': 'Décennie', 'count': 'Nombre de communes avec données'}
+    )
+    
+    fig_completeness.update_layout(
+        xaxis_title="Décennie",
+        yaxis_title="Communes avec données",
+        template='plotly_white'
+    )
+    
+    fig_completeness.update_traces(marker_color='#2ecc71')
+    fig_completeness.show()
+```
+
+## Évolution administrative
+
+### Ancien Régime
+Les données révèlent la complexité du système administratif d'Ancien Régime avec ses multiples échelons :
+
+- **Intendances** : Paris, Orléans, Alençon
+- **Diocèses** : Chartres principalement  
+- **Bailliages, élections, greniers à sel** : maillage territorial dense
+
+### Révolution et époque moderne
+La Révolution française a profondément restructuré l'organisation territoriale :
+
+- **Districts de 1790** : première réorganisation révolutionnaire
+- **Cantons** : évolution de 1790 à 1982
+- **Arrondissements modernes** : découpage contemporain
+
+## Qualité et complétude des données
+
+```{python}
+# Statistiques de qualité
+completeness_stats = pd.DataFrame(list(quality_report['completeness_by_suffix'].items()), 
+                                 columns=['suffix', 'completeness_pct'])
+completeness_stats = completeness_stats.sort_values('completeness_pct', ascending=True)
+
+fig_quality = px.bar(
+    completeness_stats,
+    y='suffix',
+    x='completeness_pct',
+    orientation='h',
+    title='Complétude des données par type de mesure (%)',
+    labels={'suffix': 'Type de mesure', 'completeness_pct': 'Complétude (%)'}
+)
+
+fig_quality.update_layout(
+    xaxis_title="Complétude (%)",
+    yaxis_title="Type de mesure",
+    template='plotly_white'
+)
+
+fig_quality.update_traces(marker_color='#e74c3c')
+fig_quality.show()
+
+print(f"\n📊 Résumé qualité :")
+print(f"   • {quality_report['uncertainty_flags']} communes avec flags d'incertitude")
+print(f"   • {quality_report['communes_with_series']}/{quality_report['total_communes']} communes avec données temporelles")
+print(f"   • 0/{quality_report['total_communes']} communes avec coordonnées géographiques")
+```
+
+### Types de mesures disponibles
+
+- **h** : Habitants (population totale)
+- **f** : Feux (unités fiscales d'Ancien Régime)  
+- **f_tot, f_masc** : Décompositions par genre
+- **g** : Mesures spécifiques (à préciser)
+
+## Utilisation de la carte
+
+La carte interactive permet d'explorer ces données :
+
+1. **Naviguez dans le temps** avec le slider (1250-1982)
+2. **Changez le type de mesure** avec le sélecteur
+3. **Explorez les détails** en cliquant sur les communes
+4. **Partagez** une vue spécifique via l'URL
+
+---
+
+**Note technique** : Les coordonnées géographiques ne sont pas encore intégrées. La carte montre actuellement la structure des données mais les marqueurs ne sont pas géolocalisés. Cette fonctionnalité sera ajoutée dans une prochaine version.
+
+## Perspectives d'analyse
+
+Ces données permettent d'étudier :
+
+- L'impact des crises démographiques (guerres, famines, épidémies)
+- Les transformations administratives et leur effet sur les territoires
+- L'évolution des systèmes de mesure et de recensement
+- Les dynamiques territoriales à long terme
