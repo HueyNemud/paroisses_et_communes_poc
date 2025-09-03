@@ -5,7 +5,7 @@ execute:
   evaluate: true
 ---
 
-# Allaines-Mervilliers
+<span id="coords" data-lat="48.190379" data-lon="1.825523" style="display:none;"></span>
 
 ## Informations hiérarchiques
 
@@ -48,7 +48,7 @@ df_plot = df_pop.dropna(subset=['population'])
 if df_plot.empty:
     print('Aucune donnée disponible.')
 else:
-    fig = px.line(df_plot, x='year', y='population', markers=True,
+    fig = px.scatter(df_plot, x='year', y='population',
                   title='Population par année')
     fig.update_layout(xaxis_title='Année', yaxis_title='Population')
     fig.show()
