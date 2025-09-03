@@ -1,0 +1,55 @@
+---
+title: "Abondant"
+format: html
+execute:
+  evaluate: true
+---
+
+# Abondant
+
+## Informations hiérarchiques
+
+| Propriété | Valeur |
+|---|---|
+| insee | 28001 |
+| section | s_o |
+| superficie | 3480 |
+| intendance | Paris |
+| election | Dreux |
+| subdelegation | Dreux |
+| grenier | Dreux |
+| coutume | Chartres |
+| parlement | Paris |
+| bailliage | Dreux |
+| gouvernement | Île-de-France |
+| diocese | Chartres |
+| archidiacone | Dreux |
+| doyenne | Dreux |
+| vocable | saint Pierre |
+| presentateur | abbé de Coulombs et chapitre de Dreux alternativement |
+| district_1790 | Dreux |
+| canton_1790 | Bû |
+| canton_1801 | Anet |
+| arrondissement_1982 | Dreux |
+| canton _1982 | Anet |
+
+## Évolution historique de la population
+
+
+```{python}
+import pandas as pd
+import plotly.express as px
+
+pairs = [(1250, 78), (1616, None), (1665, None), (1680, None), (1680, None), (1686, None), (1686, None), (1693, None), (1700, None), (1709, 29), (1710, None), (1713, 188), (1720, 58), (1725, 190), (1725, 513), (1726, 188), (1726, 594), (1730, None), (1735, None), (1735, None), (1735, None), (1741, None), (1743, None), (1745, None), (1745, None), (1746, None), (1746, None), (1755, None), (1755, None), (1757, None), (1757, None), (1766, 58), (1768, None), (1774, None), (1775, None), (1775, None), (1785, None), (1785, None), (1786, None), (1786, None), (1787, None), (1787, None), (1788, None), (1788, None), (1789, None), (1789, None), (1789, None), (1789, None), (1790, None), (1790, None), (1790, None), (1790, 1125), (1793, 1162), (1801, 72), (1801, None), (1801, 1176), (1806, 1217), (1820, 1144), (1826, 1160), (1831, 1140), (1836, 1146), (1841, 1132), (1846, 1180), (1851, 1185), (1856, 1067), (1861, 933), (1866, 921), (1872, 868), (1876, 879), (1881, 821), (1886, 809), (1891, 916), (1896, 744), (1901, 724), (1906, 724), (1911, 728), (1921, 622), (1926, 678), (1931, 676), (1936, 616), (1946, 728), (1954, 747), (1962, 732), (1962, 751), (1968, 815), (1975, 1017), (1982, None), (1982, None), (1982, 1314)]
+df_pop = pd.DataFrame(pairs, columns=['year','population']).sort_values('year')
+df_pop['population'] = pd.to_numeric(df_pop['population'], errors='coerce')
+df_plot = df_pop.dropna(subset=['population'])
+
+if df_plot.empty:
+    print('Aucune donnée disponible.')
+else:
+    fig = px.scatter(df_plot, x='year', y='population',
+                  title='Population par année')
+    fig.update_layout(xaxis_title='Année', yaxis_title='Population')
+    fig.show()
+```

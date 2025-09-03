@@ -1,17 +1,17 @@
-# Hugo
-/public/
-/resources/_gen/
-/assets/jsconfig.json
-hugo_stats.json
+# Bundles Hugo générés
+/content/communes/*/*.png
+/content/communes/*/*.html
 
-# Quarto
-/.quarto/
+# Quarto build
 _site/
-.Rproj.user
-.RData
-.Rhistory
+/.quarto/
 *.qmd.html
 _freeze/
+
+# Hugo build
+/public/
+/resources/_gen/
+hugo_stats.json
 
 # Python
 __pycache__/
