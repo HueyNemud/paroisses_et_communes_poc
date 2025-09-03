@@ -94,6 +94,11 @@ jobs:
         with:
           version: 1.7.34  # or pin a version
 
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jupyter plotly
+          
       - name: Render Quarto pages
         uses: quarto-dev/quarto-actions/render@v2
         with:
