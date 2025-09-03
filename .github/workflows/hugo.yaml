@@ -46,7 +46,8 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Create directory for user-specific executable files
-        run: mkdir -p "${HOME}/.local"
+        run: |
+          mkdir -p "${HOME}/.local"
 
       - name: Install Dart Sass
         run: |
@@ -71,10 +72,12 @@ jobs:
           echo "Node.js: $(node --version)"
 
       - name: Install Node.js dependencies
-        run: [[ -f package-lock.json || -f npm-shrinkwrap.json ]] && npm ci || true
+        run: |
+          [[ -f package-lock.json || -f npm-shrinkwrap.json ]] && npm ci || true
 
       - name: Configure Git
-        run: git config core.quotepath false
+        run: |
+          git config core.quotepath false
 
       - name: Cache restore
         id: cache-restore
