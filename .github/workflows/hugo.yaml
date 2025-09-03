@@ -92,7 +92,7 @@ jobs:
       - name: Setup Quarto
         uses: quarto-dev/quarto-actions/setup@v2
         with:
-          version: v1.7.34  # or pin a version
+          version: 1.7.34  # or pin a version
 
       - name: Render Quarto pages
         uses: quarto-dev/quarto-actions/render@v2
