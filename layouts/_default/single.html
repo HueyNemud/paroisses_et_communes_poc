@@ -7,13 +7,12 @@
     <title>{{ if .IsHome }}{{ .Site.Title }}{{ else }}{{ .Title }} | {{ .Site.Title }}{{ end }}</title>
     <meta name="description" content="{{ .Site.Params.description | default .Summary }}">
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="/lib/leaflet/leaflet.css">
-    <link rel="stylesheet" href="/lib/markercluster/MarkerCluster.Default.css">
-
     <!-- Leaflet JavaScript -->
-    <script src="/lib/leaflet/leaflet.js"></script>
-    <script src="/lib/markercluster/leaflet.markercluster.js"></script>
+    {{ $leafletcss := resources.Get "css/leaflet.css" | minify | fingerprint "sha512" }}
+    <link rel="stylesheet" href="{{ $leafletcss.RelPermalink }}" integrity="{{ $leafletcss.Data.Integrity }}" />
+
+    {{ $leafletjs := resources.Get "js/leaflet.js" | minify | fingerprint "sha512" }}
+    <script type="text/javascript" src="{{ $leafletjs.RelPermalink }}" integrity="{{ $leafletjs.Data.Integrity }}"></script>
 
     <!-- Styles personnalisés -->
     <style>
